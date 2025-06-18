@@ -3,11 +3,11 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User'); // Assuming your User model is in ../models/User.js
 
 exports.signup = async (req, res) => {
-  const { email, password, role } = req.body;
+  const { fullName, email, password, role } = req.body;
 
   try {
     // Basic input validation
-    if (!email || !password || !role) {
+    if (!fullName || !email || !password || !role) {
       return res.status(400).json({ msg: 'Please enter all required fields' });
     }
     if (role !== 'teacher' && role !== 'student') {
@@ -23,14 +23,11 @@ exports.signup = async (req, res) => {
 
     // Create new user instance
     user = new User({
+      fullName,
       email,
       password,
       role
     });
-
-    // Hash the password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
 
     // Save user to database
     await user.save();
@@ -45,16 +42,16 @@ exports.signup = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
   try {
     // Basic input validation
-    if (!email || !password) {
-      return res.status(400).json({ msg: 'Please enter email and password' });
+    if (!email || !password || !role) {
+      return res.status(400).json({ msg: 'Please enter email, password and role' });
     }
 
-    // Check if user exists
-    let user = await User.findOne({ email });
+    // Check if user exists (include password field explicitly)
+    let user = await User.findOne({ email }).select('+password');
 
     if (!user) {
       return res.status(400).json({ msg: 'Invalid Credentials' });
@@ -65,6 +62,11 @@ exports.login = async (req, res) => {
 
     if (!isMatch) {
       return res.status(400).json({ msg: 'Invalid Credentials' });
+    }
+
+    // Ensure the requested role matches the stored role for this email
+    if (user.role !== role) {
+      return res.status(400).json({ msg: `Invalid Credentials.` });
     }
 
     // Create JWT payload

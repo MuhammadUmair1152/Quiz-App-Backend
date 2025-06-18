@@ -1,15 +1,9 @@
 const express = require('express');
+const { signup, login } = require('../controllers/authController');
+
 const router = express.Router();
 
-// Placeholder controller functions
-const signup = (req, res) => {
-  res.send('Signup route');
-};
-
-const login = (req, res) => {
-  res.send('Login route');
-};
-
+// Actual auth routes
 router.post('/signup', signup);
 router.post('/login', login);
 

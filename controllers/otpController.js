@@ -23,11 +23,7 @@ exports.sendOtp = async (req, res) => {
 
     // Send OTP to email
     const message = `Your OTP for quiz verification is: ${otp}`;
-    await sendEmail({
-      email: user.email,
-      subject: 'Quiz Verification OTP',
-      message,
-    });
+    await sendEmail(user.email, 'Quiz Verification OTP', message);
 
     res.status(200).json({ message: 'OTP sent to your email' });
 
@@ -59,7 +55,8 @@ exports.verifyOtp = async (req, res) => {
     user.otpExpires = undefined;
     await user.save();
 
-    res.status(200).json({ message: 'OTP verified successfully' });
+    res.status(200).json({ success: true, message: 'OTP verified successfully' });
+
 
   } catch (error) {
     console.error(error);

@@ -136,6 +136,8 @@ exports.getAssignedQuizzes = async (req, res) => {
   }
 };
 
+
+
 // @desc    Submit a quiz attempt
 // @route   POST /api/quizzes/:id/submit
 // @access  Private (Student only)
@@ -143,46 +145,65 @@ exports.submitQuizAttempt = async (req, res) => {
   try {
     const quizId = req.params.id;
     const studentId = req.user.id;
-    const { studentAnswers } = req.body; // Array of student answers
+    const { studentAnswers } = req.body; // Array of selected option indexes
 
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
-    // In a real application, you would decrypt the quiz questions here
+    // Decrypt quiz questions
     const decrypted = decryptQuestions(quiz.questions);
-    const questions = decrypted; // Replace earlier reference
+    const questions = decrypted;
 
     let correctAnswers = 0;
-    const results = [];
+    const detailedResults = [];
 
     for (let i = 0; i < questions.length; i++) {
       const question = questions[i];
-      const studentAnswer = studentAnswers[i];
+      const selectedIndex = studentAnswers[i];
 
-      const isCorrect = studentAnswer === question.correctAnswer; // Simple string comparison
-      if (isCorrect) {
-        correctAnswers++;
+      // Validate index
+      if (selectedIndex === undefined || selectedIndex < 0 || selectedIndex >= question.answerOptions.length) {
+        // If invalid or unanswered
+        detailedResults.push({
+          question: question.questionText,
+          studentAnswer: null,
+          correctAnswer: question.correctAnswer,
+          isCorrect: false,
+        });
+        continue;
       }
 
-      results.push({
+      const selectedAnswer = question.answerOptions[selectedIndex];
+      const isCorrect = selectedAnswer === question.correctAnswer;
+
+      if (isCorrect) correctAnswers++;
+
+      detailedResults.push({
         question: question.questionText,
-        studentAnswer: studentAnswer,
+        studentAnswer: selectedAnswer,
         correctAnswer: question.correctAnswer,
-        isCorrect: isCorrect,
+        isCorrect,
       });
     }
 
     const percentage = (correctAnswers / questions.length) * 100;
-
     const score = correctAnswers;
 
-    // Map raw answers to schema format { questionId, chosenAnswer }
-    const answerDocs = questions.map((q, idx) => ({
-      questionId: q._id,
-      chosenAnswer: studentAnswers[idx],
-    }));
+    // Prepare studentAnswers for DB - only include answered questions
+    const answerDocs = questions
+      .map((q, idx) => {
+        const selectedIndex = studentAnswers[idx];
+        if (selectedIndex !== undefined && selectedIndex >= 0 && selectedIndex < q.answerOptions.length) {
+          return {
+            questionId: q._id,
+            chosenAnswer: q.answerOptions[selectedIndex],
+          };
+        }
+        return null; // Mark unanswered questions as null for filtering
+      })
+      .filter(answer => answer !== null); // Remove unanswered questions
 
     const newResult = new Result({
       quiz: quizId,
@@ -190,16 +211,18 @@ exports.submitQuizAttempt = async (req, res) => {
       studentAnswers: answerDocs,
       score,
       percentage,
+      details: detailedResults, // Optional: useful for frontend
     });
 
     await newResult.save();
 
-    res.status(200).json({ message: 'Quiz attempt submitted successfully' });
+    res.status(200).json({ message: 'Quiz attempt submitted successfully', percentage, score });
   } catch (error) {
-    console.error(error);
+    console.error('Error in submitQuizAttempt:', error);
     res.status(500).json({ message: 'Server Error' });
   }
 };
+
 
 // @desc    Get student results for a specific quiz
 // @route   GET /api/quizzes/:id/results
